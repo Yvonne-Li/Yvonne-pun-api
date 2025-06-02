@@ -1,0 +1,9 @@
+flask==3.0.0
+flask-cors==4.0.0
+openai==1.3.0
+python-dotenv==1.0.0
+
+<artArtifact identifier="vercel-requirements" type="application/vnd.ant.code" language="text" title="requirements.txt">
+flask==2.3.3
+flask-cors==4.0.0
+</artArtifact>

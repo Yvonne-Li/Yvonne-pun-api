@@ -1,0 +1,20 @@
+{
+  "functions": {
+    "api/chat.py": {
+      "maxDuration": 10
+    },
+    "api/index.py": {
+      "maxDuration": 5
+    }
+  },
+  "routes": [
+    {
+      "src": "/api/chat",
+      "dest": "/api/chat.py"
+    },
+    {
+      "src": "/api/puns",
+      "dest": "/api/index.py"
+    }
+  ]
+}
