@@ -1,8 +1,15 @@
+# api/index.py
 from http.server import BaseHTTPRequestHandler
 import json
 import random
+import os
 
-# Simple pun database for free deployment
+try:
+    import openai
+    openai.api_key = os.environ.get("OPENAI_API_KEY")
+except ImportError:
+    openai = None
+
 PUN_DATABASE = {
     'programming': [
         "Why do programmers prefer dark mode? Because light attracts bugs! 🐛",
@@ -64,56 +71,7 @@ PUN_DATABASE = {
 }
 
 class handler(BaseHTTPRequestHandler):
-    def do_POST(self):
-        # Handle CORS
-        self.send_response(200)
-        self.send_header('Access-Control-Allow-Origin', '*')
-        self.send_header('Access-Control-Allow-Methods', 'POST, OPTIONS')
-        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
-        self.send_header('Content-Type', 'application/json')
-        
-        try:
-            # Get request body
-            content_length = int(self.headers['Content-Length'])
-            post_data = self.rfile.read(content_length)
-            data = json.loads(post_data.decode('utf-8'))
-            
-            if 'message' not in data:
-                self.end_headers()
-                self.wfile.write(json.dumps({'error': 'Message field is missing'}).encode())
-                return
-            
-            message = data['message'].lower()
-            
-            # Simple keyword matching
-            category = 'general'
-            if any(word in message for word in ['programming', 'code', 'developer', 'computer', 'software', 'bug', 'javascript', 'python', 'java', 'coding']):
-                category = 'programming'
-            elif any(word in message for word in ['data', 'analytics', 'database', 'sql', 'excel', 'statistics', 'analysis']):
-                category = 'data'
-            elif any(word in message for word in ['food', 'eat', 'cook', 'restaurant', 'hungry', 'cheese', 'egg', 'cookie']):
-                category = 'food'
-            elif any(word in message for word in ['coffee', 'latte', 'espresso', 'brew']):
-                category = 'coffee'
-            elif any(word in message for word in ['animal', 'dog', 'cat', 'pet', 'zoo', 'bear', 'fish', 'elephant']):
-                category = 'animals'
-            elif any(word in message for word in ['toronto', 'canada', 'canadian', '6ix']):
-                category = 'toronto'
-            
-            # Get random puns from the category
-            available_puns = PUN_DATABASE[category]
-            num_puns = min(5, len(available_puns))
-            selected_puns = random.sample(available_puns, num_puns)
-            
-            response_text = "\n\n".join(selected_puns)
-            
-            self.end_headers()
-            self.wfile.write(json.dumps({'response': response_text}).encode())
-            
-        except Exception as e:
-            self.end_headers()
-            self.wfile.write(json.dumps({'error': f'Something went wrong: {str(e)}'}).encode())
-    
+
     def do_OPTIONS(self):
         # Handle CORS preflight
         self.send_response(200)
@@ -121,3 +79,38 @@ class handler(BaseHTTPRequestHandler):
         self.send_header('Access-Control-Allow-Methods', 'POST, OPTIONS')
         self.send_header('Access-Control-Allow-Headers', 'Content-Type')
         self.end_headers()
+
+    def do_POST(self):
+        self.send_response(200)
+        self.send_header('Content-type', 'application/json')
+        self.send_header('Access-Control-Allow-Origin', '*')  # CORS
+        self.end_headers()
+
+        content_length = int(self.headers['Content-Length'])
+        body = self.rfile.read(content_length)
+        data = json.loads(body)
+
+        topic = data.get('message', '').strip().lower()
+
+        # 1. Try OpenAI first
+        if openai and openai.api_key:
+            try:
+                response = openai.ChatCompletion.create(
+                    model="gpt-3.5-turbo",
+                    messages=[
+                        {"role": "system", "content": "You are an AI assistant with a witty sense of humor and a knack for crafting clever puns and wordplay. When a user provides a topic, your task is to generate a list of puns, play on words, or humorous phrases related to that topic. The wordplay should be original, creative, and aim to elicit a laugh or a groan from the reader."},
+                        {"role": "user", "content": f"Tell me puns about {topic}"}
+                    ]
+                )
+                pun = response.choices[0].message['content']
+                self.wfile.write(json.dumps({ "response": pun.strip() }).encode())
+                return
+            except Exception as e:
+                print("OpenAI failed, falling back to local puns:", e)
+
+        # 2. Fallback to local pun database
+        fallback_key = next((key for key in PUN_DATABASE if key in topic), 'general')
+        fallback_puns = PUN_DATABASE.get(fallback_key, PUN_DATABASE['general'])
+        puns = random.sample(fallback_puns, k=min(3, len(fallback_puns)))
+        self.wfile.write(json.dumps({ "response": "\n".join(puns) }).encode())
+        self.wfile.write(json.dumps({ "response": pun }).encode())

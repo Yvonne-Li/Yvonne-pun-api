@@ -1,0 +1,10 @@
+.
+├── api
+│   ├── chat.py
+│   └── index.py
+├── app.py
+├── project_structure.txt
+├── requirements.txt
+└── vercel.json
+
+2 directories, 6 files
