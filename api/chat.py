@@ -2,13 +2,12 @@
 from http.server import BaseHTTPRequestHandler
 import json
 import os
-from openai import OpenAI
 
-# Initialize OpenAI client with optional org ID
-client = OpenAI(
-    api_key=os.environ.get('OPENAI_API_KEY'),
-    organization=os.environ.get('OPENAI_ORG_ID') or None
-)
+try:
+    from openai import OpenAI
+    client = OpenAI(api_key=os.environ.get('OPENAI_API_KEY'))
+except ImportError:
+    client = None
 
 class handler(BaseHTTPRequestHandler):
 
@@ -21,13 +20,18 @@ class handler(BaseHTTPRequestHandler):
         self.end_headers()
 
     def do_POST(self):
-        self.send_response(200)
-        self.send_header('Content-Type', 'application/json')
-        self.send_header('Access-Control-Allow-Origin', '*')
-        self.end_headers()
-
         try:
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+
+            # Read request body
             content_length = int(self.headers.get('Content-Length', 0))
+            if content_length == 0:
+                self.wfile.write(json.dumps({'error': 'No data received'}).encode())
+                return
+
             post_data = self.rfile.read(content_length)
             data = json.loads(post_data.decode('utf-8'))
 
@@ -36,8 +40,9 @@ class handler(BaseHTTPRequestHandler):
                 self.wfile.write(json.dumps({'error': 'Missing or empty "message" field.'}).encode())
                 return
 
-            if not client.api_key:
-                self.wfile.write(json.dumps({'error': 'Missing OpenAI API key.'}).encode())
+            # Check if OpenAI client is available and has API key
+            if not client or not client.api_key:
+                self.wfile.write(json.dumps({'error': 'OpenAI API not configured'}).encode())
                 return
 
             # Call OpenAI API
@@ -53,14 +58,22 @@ class handler(BaseHTTPRequestHandler):
                         )
                     },
                     {"role": "user", "content": user_message}
-                ]
+                ],
+                max_tokens=200
             )
 
             result = response.choices[0].message.content.strip()
             self.wfile.write(json.dumps({'response': result}).encode())
 
+        except json.JSONDecodeError:
+            self.send_response(400)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            self.wfile.write(json.dumps({'error': 'Invalid JSON format'}).encode())
         except Exception as e:
-            print("Error during OpenAI completion:", e)
-            self.wfile.write(json.dumps({
-                'error': f'An error occurred: {str(e)}'
-            }).encode())
+            self.send_response(500)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            self.wfile.write(json.dumps({'error': f'Server error: {str(e)}'}).encode())

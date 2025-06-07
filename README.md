@@ -3,7 +3,7 @@
 
 TRY IT OUT
 ```Bash
-curl -X POST https://your-vercel-domain.vercel.app/api/chat \
+curl -X POST https://yvonne-pun-api.vercel.app/api/chat \
   -H "Content-Type: application/json" \
   -d '{"message": "Tell me puns about cats"}'
 ```
